@@ -1,6 +1,6 @@
 # spike_pstrsv
 
-By [Ilke Cugu](http://user.ceng.metu.edu.tr/~e1881739/), [Murat Manguoglu](http://user.ceng.metu.edu.tr/~manguoglu/).
+By [Ilke Cugu](http://user.ceng.metu.edu.tr/~e1881739/) and [Murat Manguoglu](http://user.ceng.metu.edu.tr/~manguoglu/).
 
 ## Table of Contents
 
@@ -37,7 +37,7 @@ If you use this solver in your research, please cite:
 ```
 
 ## API
-**spike_pstrsv(const char uplo, int m, double *a, MKL_INT *ia, MKL_INT *ja, double *b, double *x, int nthreads)**
+**spike_pstrsv(const char uplo, int m, double \*a, MKL_INT \*ia, MKL_INT \*ja, double \*b, double \*x, int nthreads)**
 
 This routine solves a triangular system of linear equations with matrix-vector operations for a sparse matrix stored in the compressed sparse row (CSR) format (3 array variation):
 
