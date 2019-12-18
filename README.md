@@ -18,7 +18,7 @@ By [Ilke Cugu](http://user.ceng.metu.edu.tr/~e1881739/) and [Murat Manguoglu](ht
 **Full list of items**
   * src: The original source codes of spike_pstrsv
   * test: Performance profiling codes
-  * tools: Python script to generate performance plots and result tables (in LaTeX format)
+  * tools: Python/Bash scripts to generate performance plots and result tables (in LaTeX format)
   * compile.sh: Bash script to compile the codes (--help: for detailed explanations)
   * example_usage.c: Sample code to read a test matrix in MatrixMarket format and to run spike_pstrsv
   * Makefile.profiler: Makefile for the profiler
@@ -135,4 +135,4 @@ This folder is reserved for tools to analyze the spike_pstrsv logs mainly for pr
 
 **Content**
  - plotSpeedUp.py: Python script that generates performance plots & result tables of runtime analysis logs of spike_pstrsv
-   - For detailed instructions on how to use: python plotSpeedUp.py --help
+ - auto_experiments.sh: Bash script to run detailed performance profiling experiments using different matrix reordering algorithms.
