@@ -38,6 +38,7 @@ If you use this solver in your research, please cite:
 
 ## API
 **spike_pstrsv(const char uplo, int m, double \*a, MKL_INT \*ia, MKL_INT \*ja, double \*b, double \*x, int nthreads)**
+======
 
 This routine first calls the preprocessor, then solves the given sparse triangular system of linear equations which is stored in the compressed sparse row (CSR) format (3 array variation):
 
@@ -58,6 +59,7 @@ A*x = b
   - nthreads: Number of OpenMP threads to be used by the solver.
   
 **spike_pstrsv_preproc(double \*a, MKL_INT \*ia, MKL_INT \*ja, int n, int nthreads, const char uplo)**
+======
 
 Preprocessing routine for spike_pstrsv_solve. In this routine, we handle operations that are independent from the right hand side vector.  This splitting is useful when it is used in an iterative scheme, preprocessing is done only once and the solver is often called multiple times. 
 
@@ -72,6 +74,7 @@ Preprocessing routine for spike_pstrsv_solve. In this routine, we handle operati
    - 'L' or 'l' for lower triangle of the matrix A
   
 **spike_pstrsv_solve(const char uplo, int m, double \*b, double \*x, int nthreads)**
+======
 
 The proposed parallel sparse triangular system solver. 
 
