@@ -39,7 +39,7 @@ If you use this solver in your research, please cite:
 ## API
 **spike_pstrsv(const char uplo, int m, double \*a, MKL_INT \*ia, MKL_INT \*ja, double \*b, double \*x, int nthreads)**
 
-This routine solves a triangular system of linear equations with matrix-vector operations for a sparse matrix stored in the compressed sparse row (CSR) format (3 array variation):
+This routine first calls the preprocessor, then solves the given sparse triangular system of linear equations which is stored in the compressed sparse row (CSR) format (3 array variation):
 
 ```
 A*x = b
@@ -57,4 +57,29 @@ A*x = b
   - x: Solution vector. (Array, size is m)
   - nthreads: Number of OpenMP threads to be used by the solver.
   
+**spike_pstrsv_preproc(double \*a, MKL_INT \*ia, MKL_INT \*ja, int n, int nthreads, const char uplo)**
+
+Preprocessing routine for spike_pstrsv_solve. In this routine, we handle operations that are independent from the right hand side vector.  This splitting is useful when it is used in an iterative scheme, preprocessing is done only once and the solver is often called multiple times. 
+
+**Parameters**
+  - a: Array containing non-zero elements of the matrix A. (Array, size is ia[n])
+  - ia: Array containing indices of the elements in the array a. (Array, size is n + 1)
+  - ja: Array containing the column indices of the non-zero element of the matrix A. (Array, size is ia[n])
+  - n: Number of rows of the matrix A.
+  - nthreads: Number of OpenMP threads to be used by the solver.
+  - uplo: Specifies whether the upper or low triangle of the matrix A is used. 
+   - 'U' or 'u' for upper triangle of the matrix A
+   - 'L' or 'l' for lower triangle of the matrix A
   
+**spike_pstrsv_solve(const char uplo, int m, double \*b, double \*x, int nthreads)**
+
+The proposed parallel sparse triangular system solver. 
+
+**Parameters**
+  - uplo: Specifies whether the upper or low triangle of the matrix A is used. 
+   - 'U' or 'u' for upper triangle of the matrix A
+   - 'L' or 'l' for lower triangle of the matrix A
+  - m: Number of rows of the matrix A.
+  - b: Right-hand side vector. (Array, size is m)
+  - x: Solution vector. (Array, size is m)
+  - nthreads: Number of OpenMP threads to be used by the solver.
