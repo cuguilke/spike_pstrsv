@@ -135,4 +135,4 @@ This folder is reserved for tools to analyze the spike_pstrsv logs mainly for pr
 
 **Content**
  - plotSpeedUp.py: Python script that generates performance plots & result tables of runtime analysis logs of spike_pstrsv
-  - For detailed instructions on how to use: python plotSpeedUp.py --help
+   - For detailed instructions on how to use: python plotSpeedUp.py --help
