@@ -19,10 +19,7 @@ By [Ilke Cugu](http://user.ceng.metu.edu.tr/~e1881739/) and [Murat Manguoglu](ht
   * src: The original source codes of spike_pstrsv
   * test: Performance profiling codes
   * tools: Python script to generate performance plots and result tables (in LaTeX format)
-  * compile.sh: Bash script to compile the codes:
-   * --help: for detailed explanations
-   * --runtime_analysis: to compile performance profilng codes
-   * --example_usage: to compile sample use case code for the solver
+  * compile.sh: Bash script to compile the codes (--help: for detailed explanations)
   * example_usage.c: Sample code to read a test matrix in MatrixMarket format and to run spike_pstrsv
   * Makefile.profiler: Makefile for the profiler
   * Makefile.sample: Makefile for a quick test drive 
