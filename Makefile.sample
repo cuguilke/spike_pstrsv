@@ -1,0 +1,58 @@
+app     = exampleUsage
+
+srcExt  = c
+srcDir  = src
+objDir  = obj
+binDir  = .
+inc     = ${MKLROOT}/include $(srcDir)
+
+debug   = 0
+
+CC      = icc
+CFlags  = 
+libs    =
+libDir  = ${MKLROOT}/lib/intel64 
+Flags   = -lmkl_intel_lp64 -lmkl_intel_thread -lmkl_core -liomp5 -lpthread -lm -ldl -lmetis -qopenmp -O2
+
+ifeq ($(debug),1)
+	debug=-g
+else
+	debug=
+endif
+inc := $(addprefix -I,$(inc))
+libs := $(addprefix -l,$(libs))
+libDir := $(addprefix -L,$(libDir))
+CFlags += -c $(debug) $(inc) $(libDir) $(libs) $(Flags)
+sources := $(shell find $(srcDir) -name '*.$(srcExt)')
+sources += example_usage.c
+srcDirs := $(shell find . -name '*.$(srcExt)' -exec dirname {} \; | uniq)
+objects := $(patsubst %.$(srcExt),$(objDir)/%.o,$(sources))
+
+.phony: all clean distclean
+
+all: $(binDir)/$(app)
+
+$(binDir)/$(app): buildrepo $(objects)
+	@mkdir -p `dirname $@`
+	@echo "Linking $@..."
+	@$(CC) $(objects) $(Flags) -o $@
+
+$(objDir)/%.o: %.$(srcExt)
+	@echo "Compiling $<..."
+	@$(CC) $< -o $@ $(CFlags)
+
+clean:
+	$(RM) -r $(objDir)
+
+distclean: clean
+	$(RM) -r $(binDir)/$(app)
+
+buildrepo:
+	@$(call make-repo)
+
+define make-repo
+   for dir in $(srcDirs); \
+   do \
+	mkdir -p $(objDir)/$$dir; \
+   done
+endef
