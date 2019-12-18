@@ -7,18 +7,25 @@ By [Ilke Cugu](http://user.ceng.metu.edu.tr/~e1881739/) and [Murat Manguoglu](ht
 1. [Introduction](#introduction)
 2. [Citation](#citation)
 3. [Prerequisites](#prerequisites)
-4. [API](#api)
-5. [Tools](#tools)
+5. [Installation](#installation)
+6. [API](#api)
+7. [Tools](#tools)
 
 ## Introduction
 
 **spike_pstrsv** is a parallel sparse triangular linear system solver based on the Spike algorithm. This repository contains the codes described in the paper "A parallel multithreaded sparse triangular linear system solver" (https://www.sciencedirect.com/science/article/pii/S0898122119304602).
 
 **Full list of items**
-  * MicroExpNet.py: The original source code of the proposed FER model
-  * exampleUsage.py: A script to get prediction from a pre-trained MicroExpNet for an unlabeled image
-  * Models: Pre-trained MicroExpNet models for CK+ and Oulu-CASIA datasets.
-  * Candidates: Candidate networks build in search of a better FER model
+  * src: The original source codes of spike_pstrsv
+  * test: Performance profiling codes
+  * tools: Python script to generate performance plots and result tables (in LaTeX format)
+  * compile.sh: Bash script to compile the codes:
+   * --help: for detailed explanations
+   * --runtime_analysis: to compile performance profilng codes
+   * --example_usage: to compile sample use case code for the solver
+  * example_usage.c: Sample code to read a test matrix in MatrixMarket format and to run spike_pstrsv
+  * Makefile.profiler: Makefile for the profiler
+  * Makefile.sample: Makefile for a quick test drive 
   
 ## Citation
 
@@ -54,6 +61,29 @@ Python 2.7
 matplotlib
 numpy
 ```
+
+## Installation
+We currently have 2 executable creation modes for quick installation of spike_pstrsv:
+
+**runtimeAnalysis**
+ - To compile:
+ ```
+ ./compile.sh --runtime_analysis
+ ```
+ - To run:
+ ```
+ runtimeAnalysis <{matrix_filename}.mtx> <thread count> <uplo{U,u:L,l}> <symmetric{Y,y:S,s:N,n}> <METIS usage{Y,y:N,n}>
+ ```
+ 
+**exampleUsage**
+- To compile:
+ ```
+ ./compile.sh --example_usage
+ ```
+ - To run:
+ ```
+ exampleUsage <{matrix_filename}.mtx> <thread count> <uplo{U,u:L,l}> <symmetric{Y,y:S,s:N,n}>
+ ```
 
 ## API
 **spike_pstrsv(const char uplo, int m, double \*a, MKL_INT \*ia, MKL_INT \*ja, double \*b, double \*x, int nthreads)**
