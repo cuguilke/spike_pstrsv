@@ -38,7 +38,7 @@ If you use this solver in your research, please cite:
 
 ## API
 **spike_pstrsv(const char uplo, int m, double \*a, MKL_INT \*ia, MKL_INT \*ja, double \*b, double \*x, int nthreads)**
-======
+***
 
 This routine first calls the preprocessor, then solves the given sparse triangular system of linear equations which is stored in the compressed sparse row (CSR) format (3 array variation):
 
