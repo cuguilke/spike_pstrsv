@@ -29,13 +29,17 @@ By [Ilke Cugu](http://user.ceng.metu.edu.tr/~e1881739/) and [Murat Manguoglu](ht
 If you use this solver in your research, please cite:
 
 ```
-@article{ccuugu2019parallel,
+@article{ccuugu2020parallel,
   title={A parallel multithreaded sparse triangular linear system solver},
   author={{\c{C}}u{\u{g}}u, {\.I}lke and Manguo{\u{g}}lu, Murat},
   journal={Computers \& Mathematics with Applications},
-  year={2019},
+  volume={80},
+  number={2},
+  pages={371--385},
+  year={2020},
   publisher={Elsevier}
 }
+
 ```
 
 ## Prerequisites
