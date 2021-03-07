@@ -1,6 +1,6 @@
 # spike_pstrsv
 
-By [Ilke Cugu](http://user.ceng.metu.edu.tr/~e1881739/) and [Murat Manguoglu](http://user.ceng.metu.edu.tr/~manguoglu/).
+By [Ilke Cugu](https://cuguilke.github.io/) and [Murat Manguoglu](http://user.ceng.metu.edu.tr/~manguoglu/).
 
 ## Table of Contents
 
