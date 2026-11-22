@@ -233,7 +233,47 @@ void spike_pstrsv_solve(const char uplo, int m, double *b, double *x, int nthrea
 		}
 		else if(uplo == 'L' || uplo == 'l') // Lower Sparse Triangular Linear System Solution with Partial DS Factorization
 		{
-			//TODO: Implement lower triangular support
+			if(isReducedSystemNecessary)
+			{
+				if(hasReflection || isOptimized)
+				{
+					// Solve D1 * y = b to find right-hand side vector of the reduced system and store y in x array
+					rowCount = end_interval;
+					__ldsol(rowCount, &x[partition_start], &b[partition_start], T2, &IT2[start_D1], JT2);
+				}
+
+				// Wait for all threads to finish solving D1
+				#pragma omp barrier
+
+				// Sequential computation & solution of the reduced system
+				produceReducedY_PSTRSV3(reducedX, x);
+				#pragma omp single
+				{
+					__lsol2(numRowsReducedSystem, reducedX, T, IT, JT);
+				}
+				updateX(reducedX, x);
+
+				// First, subtract R * x from the right-hand side vector, if applicable
+				if(hasDependence) // whether the thread has dependent elements (sparse R matrix)
+					// Compute b = b - R * x	(if hasReflection -> R = R_old + D3)
+					mkl_dcsrmv(&transa, &k, &m, &alpha, matdescra, &D[ID[start_R]], &JD[ID[start_R]], &ID[start_R], &ID[start_R + 1], x, &beta, &b[partition_start]);
+
+				#pragma omp barrier
+
+				// Then, solve D2 * x = b, if applicable
+				if(hasReflection || isOptimized)
+				{
+					// Solve D2 * x = b
+					rowCount = k - start_interval;
+					if(rowCount > 0)
+						__ldsol(rowCount, &x[partition_start + start_interval], &b[partition_start + start_interval], T2, &IT2[start_D2], JT2);
+				}
+				else // no intersection means no need to split the D matrix
+					// Solve D * x = b
+					__ldsol(k, &x[partition_start], &b[partition_start], D, &ID[start_D], JD);
+			}
+			else // perfect parallelism
+				__ldsol(k, &x[partition_start], &b[partition_start], D, &ID[start_D], JD);
 		}
 	}
 }
@@ -349,7 +389,69 @@ void _spike_pstrsv_solve(const char uplo, int m, double *b, double *x, int nthre
 		}
 		else if(uplo == 'L' || uplo == 'l') // Lower Sparse Triangular Linear System Solution with Partial DS Factorization
 		{
-			//TODO: Implement lower triangular support
+			if(isReducedSystemNecessary)
+			{
+				if(hasReflection || isOptimized)
+				{
+					// Solve D1 * y = b to find right-hand side vector of the reduced system and store y in x array
+					temp_timer[th_id] = omp_get_wtime();
+					rowCount = end_interval;
+					__ldsol(rowCount, &x[partition_start], &b[partition_start], T2, &IT2[start_D1], JT2);
+					computeY_timer[th_id] += omp_get_wtime() - temp_timer[th_id];
+				}
+
+				// Wait for all threads to finish solving D1
+				temp_timer[th_id] = omp_get_wtime();
+				#pragma omp barrier
+				waitBefore_timer_pstrsv3[th_id] += omp_get_wtime() - temp_timer[th_id];
+
+				// Sequential computation & solution of the reduced system
+				produceReducedY_PSTRSV3(reducedX, x);
+				#pragma omp single
+				{
+					temp_timer[th_id] = omp_get_wtime();
+					__lsol2(numRowsReducedSystem, reducedX, T, IT, JT);
+					reduced_solver_timer_pstrsv3 += omp_get_wtime() - temp_timer[th_id];
+				}
+				updateX(reducedX, x);
+
+				// First, subtract R * x from the right-hand side vector, if applicable
+				if(hasDependence) // whether the thread has dependent elements (sparse R matrix)
+				{
+					// Compute b = b - R * x	(if hasReflection -> R = R_old + D3)
+					temp_timer[th_id] = omp_get_wtime();
+					mkl_dcsrmv(&transa, &k, &m, &alpha, matdescra, &D[ID[start_R]], &JD[ID[start_R]], &ID[start_R], &ID[start_R + 1], x, &beta, &b[partition_start]);
+					subtract_Rx_timer[th_id] += omp_get_wtime() - temp_timer[th_id];
+				}
+
+				temp_timer[th_id] = omp_get_wtime();
+				#pragma omp barrier
+				waitAfter_timer_pstrsv3[th_id] += omp_get_wtime() - temp_timer[th_id];
+
+				// Then, solve D2 * x = b, if applicable
+				if(hasReflection || isOptimized)
+				{
+					// Solve D2 * x = b
+					temp_timer[th_id] = omp_get_wtime();
+					rowCount = k - start_interval;
+					if(rowCount > 0)
+						__ldsol(rowCount, &x[partition_start + start_interval], &b[partition_start + start_interval], T2, &IT2[start_D2], JT2);
+					solveD2_timer[th_id] += omp_get_wtime() - temp_timer[th_id];
+				}
+				else // no intersection means no need to split the D matrix
+				{
+					// Solve D * x = b
+					temp_timer[th_id] = omp_get_wtime();
+					__ldsol(k, &x[partition_start], &b[partition_start], D, &ID[start_D], JD);
+					solveD_timer[th_id] += omp_get_wtime() - temp_timer[th_id];
+				}
+			}
+			else // perfect parallelism
+			{
+				temp_timer[th_id] = omp_get_wtime();
+				__ldsol(k, &x[partition_start], &b[partition_start], D, &ID[start_D], JD);
+				solveIndependent_timer[th_id] += omp_get_wtime() - temp_timer[th_id];
+			}
 		}
 	}
 }

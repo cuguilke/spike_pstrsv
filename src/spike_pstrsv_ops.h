@@ -225,6 +225,21 @@ extern inline void __ldsol(int n,double *x, double *y, double *A, MKL_INT *IA, M
 //----------------------------------------------------------------------------------------------//
 
 /*
+	Lower triangular solver: L*X = B where X will be directly stored in B
+*/
+extern inline void __ldsol2(int rowCount, int colCount, double *X, double *A, MKL_INT *IA, MKL_INT *JA, int stepsize);
+
+//----------------------------------------------------------------------------------------------//
+
+/*
+	Lower triangular solver: L*x = b for the unit diagonal matrix L
+	with single vector for both the right-hand side & the solution
+*/
+extern inline void __lsol2(int n, double *x, double *A, MKL_INT *IA, MKL_INT *JA);
+
+//----------------------------------------------------------------------------------------------//
+
+/*
 	Parallel memory initializer
 */
 void pmemset_d(double *array, int x, int n, int nthreads);
