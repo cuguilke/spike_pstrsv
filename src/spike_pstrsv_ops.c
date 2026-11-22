@@ -68,18 +68,18 @@ int epsilon_2 = 0;
 
 void initGlobals_PSTRSV3(int n, int nnz, int nthreads)
 {
-	pmemset_d(D,0,sizeof(double)*2*nnz,nthreads);
-	pmemset_i(ID,0,sizeof(MKL_INT)*2*(n+1),nthreads);
-	pmemset_i(JD,0,sizeof(MKL_INT)*2*nnz,nthreads);
-	pmemset_i(dependents,0,sizeof(MKL_INT)*n,nthreads);
-	pmemset_d(T,0,sizeof(double)*nnz,nthreads);
-	pmemset_i(JT,0,sizeof(MKL_INT)*nnz,nthreads);
-	pmemset_i(IT,0,sizeof(MKL_INT)*(n+1),nthreads);
-	pmemset_d(T2,0,sizeof(double)*3*nnz,nthreads);
-	pmemset_i(JT2,0,sizeof(MKL_INT)*3*nnz,nthreads);
-	pmemset_i(IT2,0,sizeof(MKL_INT)*3*(n+1),nthreads);
-	pmemset_i(mapReducedX,0,sizeof(MKL_INT)*n,nthreads);
-	pmemset_d(reducedX,0,sizeof(double)*n,nthreads);
+	pmemset_d(D,0,2*nnz,nthreads);
+	pmemset_i(ID,0,2*(n+1),nthreads);
+	pmemset_i(JD,0,2*nnz,nthreads);
+	pmemset_i(dependents,0,n,nthreads);
+	pmemset_d(T,0,nnz,nthreads);
+	pmemset_i(JT,0,nnz,nthreads);
+	pmemset_i(IT,0,n+1,nthreads);
+	pmemset_d(T2,0,3*nnz,nthreads);
+	pmemset_i(JT2,0,3*nnz,nthreads);
+	pmemset_i(IT2,0,3*(n+1),nthreads);
+	pmemset_i(mapReducedX,0,n,nthreads);
+	pmemset_d(reducedX,0,n,nthreads);
 	memset(starts_mapR,0,sizeof(MKL_INT)*nthreads);
 	memset(ends_mapR,0,sizeof(MKL_INT)*nthreads);
 	memset(starts_R,0,sizeof(MKL_INT)*nthreads);
@@ -124,6 +124,10 @@ void free_PSTRSV3()
 	mkl_free(R_dense);
 	mkl_free(compressedX);
 	mkl_free(mapR);
+	R_dense = NULL;
+	S = NULL;
+	compressedX = NULL;
+	mapR = NULL;
 }
 
 void setDependents_PSTRSV3(double *a, MKL_INT *ia, MKL_INT *ja, int n, int nthreads, const char uplo)
@@ -205,7 +209,16 @@ int getIntervalEnd(double *a, MKL_INT *ia, MKL_INT *ja, int start, int end, cons
 	}
 	else // uplo == 'l' || uplo == 'L'
 	{
-		//TODO: Implement lower triangular support
+		result = start;
+		for(i=ia[start];i<ia[end];i++)
+		{
+			col = ja[i];
+			while(i >= ia[result + 1])
+				result++;
+			if(col < start)
+				return result;
+		}
+		result = end;
 	}
 
 	return result;
@@ -226,6 +239,7 @@ int preprocessS_PSTRSV3(double *a, MKL_INT *ia, MKL_INT *ja, int n, int nthreads
 		function before producing the small system.
 	*/
 	int i, t, nextRow, col, start_D, end_D, partition_start, partition_end, gap, minDependentRow, maxIntersectionRow, i_D0 = 0, row = 0;
+	int maxDependentRow, minIntersectionRow;
 	long long colCount, rowCount, totalArea = 0;
 	
 	if(isReducedSystemNecessary)
@@ -334,11 +348,71 @@ int preprocessS_PSTRSV3(double *a, MKL_INT *ia, MKL_INT *ja, int n, int nthreads
 			}
 			else // uplo == 'l' || uplo == 'L'
 			{
-				//TODO: Implement lower triangular support
+				// Find the dependency with the largest column index
+				maxDependentRow = partition_start;
+				for(i=partition_end-1;i>=partition_start;i--)
+				{
+					if(dependents[i])
+					{
+						maxDependentRow = i;
+						hasReflections[t] = 1;
+						break;
+					}
+				}
+
+				// The first out-of-partition nonzero bounds the independent prefix
+				minIntersectionRow = getIntervalEnd(a, ia, ja, partition_start, partition_end, uplo);
+				if(hasReflections[t])
+				{
+					for(i=ia[partition_start];i<ia[maxDependentRow + 1];i++)
+					{
+						col = ja[i];
+						if(col < partition_start && dependents[col] != 2 + t)
+						{
+							colCount++;
+							dependents[col] = 2 + t;
+						}
+					}
+					if(colCount > 0)
+						hasToCalculateSs[t] = 1;
+
+					numCols_S[t] = (MKL_INT)colCount;
+					numRows_S[t] = max(1 + maxDependentRow - minIntersectionRow, 0);
+					rowCount = (long long)numRows_S[t];
+					end_intervals[t] = maxDependentRow - partition_start + 1;
+					start_intervals[t] = (minIntersectionRow > maxDependentRow) ? end_intervals[t] - 1 : minIntersectionRow - partition_start;
+
+					// Produce D0 between the first intersection and the last dependency
+					gap = start_intervals[t];
+					start_D = starts_D[t] + gap;
+					end_D = starts_D[t] + end_intervals[t];
+					starts_D0[t] = row;
+					for(nextRow=start_D;nextRow<end_D;nextRow++)
+					{
+						for(i=ID[nextRow];i<ID[nextRow + 1];i++)
+						{
+							col = JD[i];
+							if(gap <= col && col < end_intervals[t])
+							{
+								T2[i_D0] = D[i];
+								JT2[i_D0] = col - gap;
+								i_D0++;
+							}
+						}
+						row++;
+						IT2[row] = i_D0;
+					}
+					ends_D0[t] = row;
+				}
+				else
+				{
+					start_intervals[t] = minIntersectionRow - partition_start;
+					end_intervals[t] = start_intervals[t];
+				}
 			}
 			
 			// Determine memory need of S matric partitions and their starting & ending points
-			starts_S[t] = ends_S[t-1];
+			starts_S[t] = (t == 0) ? 0 : ends_S[t-1];
 			ends_S[t] = starts_S[t] + (MKL_INT)(colCount * rowCount);
 			totalArea += colCount * rowCount;
 		}
@@ -380,9 +454,10 @@ void optimizeLoadBalance(double *a, MKL_INT *ia, MKL_INT *ja, int n, int nthread
 		for the full D_i * x_i = b_i solution while other threads are
 		solving the D1_i * x_i = b_i at the beginning of pSTRSV3.
 	*/
-	int i, j, temp, row, col, start, end, start_interval, end_interval, gain, loss, totalLoss, minLoss = INF, bestCut;
+	int i, j, temp, row, col, start, end, start_interval, end_interval, gain, loss, totalLoss = 0, minLoss = INF, bestCut;
 	int nnz_R, nnz_D, nnz_D1, nnz_D2, nnz_P, cost1 = 0, cost2 = 0, curCost1 = 0, curCost2 = 0, newCost1 = 0, newCost2 = 0;
 	char hasReflection, betterLoadBalance = 0;
+	int bestCuts[MAXTHREADCOUNT];
 
 	if(uplo == 'u' || uplo == 'U')
 	{
@@ -556,7 +631,71 @@ void optimizeLoadBalance(double *a, MKL_INT *ia, MKL_INT *ja, int n, int nthread
 	}
 	else // uplo == 'l' || uplo == 'L'
 	{
-		//TODO: Implement lower triangular support
+		// Reflected partitions have fixed costs in the two solution phases
+		for(i=0;i<nthreads;i++)
+		{
+			start = partition_starts[i];
+			end = partition_ends[i];
+			if(hasReflections[i])
+			{
+				start_interval = starts_D[i] + start_intervals[i];
+				end_interval = starts_D[i] + end_intervals[i];
+				nnz_D1 = ID[end_interval] - ID[starts_D[i]];
+				nnz_D2 = ia[end] - ia[start] - (ID[start_interval] - ID[starts_D[i]]);
+				cost1 = max(cost1, nnz_D1);
+				cost2 = max(cost2, nnz_D2);
+			}
+			else
+				curCost2 = max(curCost2, ia[end] - ia[start]);
+		}
+		curCost1 = cost1;
+		curCost2 = max(curCost2, cost2);
+		newCost1 = cost1;
+		newCost2 = cost2;
+
+		// Only rows before the first intersection can move to the first phase
+		for(i=0;i<nthreads;i++)
+		{
+			if(!hasReflections[i])
+			{
+				start = partition_starts[i];
+				end = partition_ends[i];
+				nnz_D = ia[end] - ia[start];
+				bestCut = 0;
+				minLoss = INF;
+				for(row=0;row<=start_intervals[i];row++)
+				{
+					nnz_D1 = ia[start + row] - ia[start];
+					nnz_D2 = nnz_D - nnz_D1;
+					loss = max(newCost1, nnz_D1) + max(newCost2, nnz_D2);
+					if(loss < minLoss)
+					{
+						minLoss = loss;
+						bestCut = row;
+					}
+				}
+				temp = ia[start + bestCut] - ia[start];
+				newCost1 = max(newCost1, temp);
+				newCost2 = max(newCost2, nnz_D - temp);
+				isOptimizeds[i] = bestCut > 0 ? 1 : 0;
+				// Save the candidate cut until the global costs are compared
+				bestCuts[i] = bestCut;
+			}
+		}
+
+		loss = max(0, newCost1 - curCost1);
+		gain = max(0, curCost2 - newCost2);
+		betterLoadBalance = gain > loss + epsilon_1 + epsilon_2;
+		for(i=0;i<nthreads;i++)
+		{
+			if(betterLoadBalance && isOptimizeds[i])
+			{
+				start_intervals[i] = bestCuts[i];
+				end_intervals[i] = start_intervals[i];
+			}
+			else
+				isOptimizeds[i] = 0;
+		}
 	}
 
 	// Final decision on the load-balance
@@ -650,7 +789,7 @@ void separateDsections_PSTRSV3(int nthreads, const char uplo, int rowD1)
 			isOptimized = isOptimizeds[t];
 			if(hasReflection || isOptimized)
 			{
-				stop = end_intervals[i];
+				stop = end_intervals[t];
 				starts_D1[t] = row;
 				partition_start = starts_D[t];
 				partition_end = partition_start + stop;
@@ -729,7 +868,7 @@ void separateDsections_PSTRSV3(int nthreads, const char uplo, int rowD1)
 			isOptimized = isOptimizeds[t];
 			if(hasReflection || isOptimized)
 			{
-				stop = end_intervals[t];
+				stop = start_intervals[t];
 				starts_D2[t] = row;
 				partition_start = starts_D[t] + stop;
 				partition_end = ends_D[t];
@@ -827,7 +966,6 @@ void preprocessR_PSTRSV3(double *a, MKL_INT *ia, MKL_INT *ja, int nthreads, cons
 	}
 	else // uplo == 'l' || uplo == 'L'
 	{
-		//TODO: Rewrite this part to produce R_new = R_old + D3
 		for(t=0;t<nthreads;t++)
 		{
 			hasReflection = hasReflections[t];
@@ -835,6 +973,7 @@ void preprocessR_PSTRSV3(double *a, MKL_INT *ia, MKL_INT *ja, int nthreads, cons
 			starts_R[t] = prefix + row - 1;
 			partition_start = partition_starts[t];
 			partition_end = partition_ends[t];
+			border = start_intervals[t] + partition_start;
 			for(i=ia[partition_start];i<ia[partition_end];i++)
 			{
 				col = ja[i];
@@ -843,8 +982,10 @@ void preprocessR_PSTRSV3(double *a, MKL_INT *ia, MKL_INT *ja, int nthreads, cons
 					ID[prefix + row] = i_R;
 					row++;
 				}
-				if(partition_end > col)
+				withinD3 = ((hasReflection || isOptimized) && col >= partition_start && col < border && border <= (row - 1)) ? 1 : 0;
+				if(withinD3 || col < partition_start)
 				{
+					hasDependences[t] = 1;
 					D[i_R] = a[i];
 					JD[i_R] = col;
 					i_R++;
@@ -956,6 +1097,7 @@ void produceCompressedR_PSTRSV3(int n, int nthreads, const char uplo)
 			}
 		}
 	}
+	mkl_free(tempMap);
 }
 
 void produceS_PSTRSV3(int nthreads, const char uplo)
@@ -1059,7 +1201,10 @@ void produceS_PSTRSV3_Parallel(int nthreads, const char uplo)
 				int newStart = newStarts[th_id];
 				int newColCount = newColCounts[th_id];
 
-				__udsol2(rowCount, newColCount, &R_dense[start_R + newStart], T2, &IT2[start_D0], JT2, colCount);
+				if(uplo == 'u' || uplo == 'U')
+					__udsol2(rowCount, newColCount, &R_dense[start_R + newStart], T2, &IT2[start_D0], JT2, colCount);
+				else
+					__ldsol2(rowCount, newColCount, &R_dense[start_R + newStart], T2, &IT2[start_D0], JT2, colCount);
 			}
 		}
 	}
@@ -1143,7 +1288,39 @@ void produceReducedSystem_PSTRSV3(int n, int nthreads, char const uplo)
 	}
 	else // uplo == 'l' || uplo == 'L'
 	{
-		//TODO: Implement lower triangular support
+		for(t=0;t<nthreads;t++)
+		{
+			partition_start = partition_starts[t];
+			partition_end = partition_ends[t];
+			rowCount = numRows_S[t];
+			colCount = numCols_S[t];
+			start_mapR = starts_mapR[t];
+			start_S = starts_S[t];
+			for(i=partition_start;i<partition_end;i++)
+			{
+				if(dependents[i])
+				{
+					row_S = i - partition_start - start_intervals[t];
+					if(hasToCalculateSs[t] && row_S >= 0 && row_S < rowCount)
+					{
+						i_S = start_S + row_S * colCount;
+						for(j=0;j<colCount;j++)
+						{
+							val = S[i_S + j];
+							if(val != 0)
+							{
+								T[index] = val;
+								JT[index] = dependents[mapR[start_mapR + j]] - 1;
+								index++;
+							}
+						}
+					}
+					IT[row] = index;
+					row++;
+				}
+			}
+		}
+		reducedSystemSolverStart = numRowsReducedSystem;
 	}
 
 	numNnzsReducedSystem = index + numRowsReducedSystem;
@@ -1278,6 +1455,50 @@ inline void __ldsol(int n, double *x, double *b, double *A, MKL_INT *IA, MKL_INT
 	}
 }
 
+inline void __ldsol2(int rowCount, int colCount, double *X, double *A, MKL_INT *IA, MKL_INT *JA, int stepsize)
+{
+	/*
+		Lower triangular solver: L*X = B where X will be directly stored in B
+	*/
+	register double t, *tempX, *tempX2;
+	register int k, j, l, col;
+	for(k=0;k<rowCount;k++)
+	{
+		tempX = &X[k * stepsize];
+		for(j=IA[k];j<IA[k+1]-1;j++)
+		{
+			t = A[j];
+			col = JA[j];
+			tempX2 = &X[col * stepsize];
+
+			#pragma omp simd
+			for(l=0;l<colCount;l++)
+				tempX[l] -= t * tempX2[l];
+		}
+
+		#pragma omp simd
+		for(l=0;l<colCount;l++)
+			tempX[l] /= A[IA[k+1]-1];
+	}
+}
+
+inline void __lsol2(int n, double *x, double *A, MKL_INT *IA, MKL_INT *JA)
+{
+	/*
+		Lower triangular solver: L*x = b for the unit diagonal matrix L
+		with single vector for both the right-hand side & the solution
+	*/
+	register double t;
+	register int k, j;
+	for(k=0;k<n;k++)
+	{
+		t = 0;
+		for(j=IA[k];j<IA[k+1];j++)
+			t += A[j]*x[JA[j]];
+		x[k] -= t;
+	}
+}
+
 void pmemset_d(double *array, int x, int n, int nthreads)
 {
 	/*
@@ -1288,7 +1509,7 @@ void pmemset_d(double *array, int x, int n, int nthreads)
 	{
 		int th_id = omp_get_thread_num();
 		int step = n / nthreads;
-		int leftover = (th_id == nthreads-1) ? (step % nthreads) : 0;
+		int leftover = (th_id == nthreads-1) ? (n % nthreads) : 0;
 		memset(&array[th_id*step],x,sizeof(double)*(step+leftover));
 	}
 }
@@ -1303,7 +1524,7 @@ void pmemset_i(MKL_INT *array, int x, int n, int nthreads)
 	{
 		int th_id = omp_get_thread_num();
 		int step = n / nthreads;
-		int leftover = (th_id == nthreads-1) ? (step % nthreads) : 0;
+		int leftover = (th_id == nthreads-1) ? (n % nthreads) : 0;
 		memset(&array[th_id*step],x,sizeof(MKL_INT)*(step+leftover));
 	}
 }
